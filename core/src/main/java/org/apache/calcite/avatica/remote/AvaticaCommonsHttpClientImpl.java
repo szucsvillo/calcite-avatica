@@ -40,7 +40,6 @@ import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
-import org.apache.hc.client5.http.protocol.HttpClientContext;
 import org.apache.hc.client5.http.socket.ConnectionSocketFactory;
 import org.apache.hc.core5.http.ContentType;
 import org.apache.hc.core5.http.NoHttpResponseException;
@@ -81,6 +80,8 @@ public class AvaticaCommonsHttpClientImpl implements AvaticaHttpClient, HttpClie
           .build();
   private static AuthScope anyAuthScope = new AuthScope(null, -1);
 
+  private boolean isClientInitialized = false;
+
   protected final URI uri;
   protected BasicAuthCache authCache;
   protected CloseableHttpClient client;
@@ -108,23 +109,19 @@ public class AvaticaCommonsHttpClientImpl implements AvaticaHttpClient, HttpClie
         .build();
     HttpClientBuilder httpClientBuilder = HttpClients.custom().setConnectionManager(pool)
         .setDefaultRequestConfig(requestConfig);
+
+    if (this.credentialsProvider != null) {
+      httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
+    }
+    if (this.authRegistry != null) {
+      httpClientBuilder.setDefaultAuthSchemeRegistry(authRegistry);
+    }
     this.client = httpClientBuilder.build();
+    isClientInitialized = true;
   }
 
   @Override public byte[] send(byte[] request) {
     while (true) {
-      HttpClientContext context = HttpClientContext.create();
-
-      // Set the credentials if they were provided.
-      if (null != this.credentialsProvider) {
-        context.setCredentialsProvider(credentialsProvider);
-        context.setAuthSchemeRegistry(authRegistry);
-        context.setAuthCache(authCache);
-      }
-
-      if (null != userToken) {
-        context.setUserToken(userToken);
-      }
 
       ByteArrayEntity entity = new ByteArrayEntity(request, ContentType.APPLICATION_OCTET_STREAM);
 
@@ -132,11 +129,11 @@ public class AvaticaCommonsHttpClientImpl implements AvaticaHttpClient, HttpClie
       HttpPost post = new HttpPost(uri);
       post.setEntity(entity);
 
-      try (CloseableHttpResponse response = execute(post, context)) {
+      try (CloseableHttpResponse response = execute(post)) {
         final int statusCode = response.getCode();
         if (HttpURLConnection.HTTP_OK == statusCode
             || HttpURLConnection.HTTP_INTERNAL_ERROR == statusCode) {
-          userToken = context.getUserToken();
+          //userToken = context.getUserToken();
           return EntityUtils.toByteArray(response.getEntity());
         } else if (HttpURLConnection.HTTP_UNAVAILABLE == statusCode) {
           LOG.debug("Failed to connect to server (HTTP/503), retrying");
@@ -159,13 +156,16 @@ public class AvaticaCommonsHttpClientImpl implements AvaticaHttpClient, HttpClie
   }
 
   // Visible for testing
-  CloseableHttpResponse execute(HttpPost post, HttpClientContext context)
+  CloseableHttpResponse execute(HttpPost post)
       throws IOException, ClientProtocolException {
-    return client.execute(post, context);
+    return client.execute(post);
   }
 
   @Override public void setUsernamePassword(AuthenticationType authType, String username,
       String password) {
+    if (isClientInitialized) {
+      throw new IllegalStateException("Credentials must be set before initialization.");
+    }
     this.credentials = new UsernamePasswordCredentials(Objects.requireNonNull(username),
         Objects.requireNonNull(password).toCharArray());
 
@@ -187,6 +187,9 @@ public class AvaticaCommonsHttpClientImpl implements AvaticaHttpClient, HttpClie
   }
 
   @Override public void setGSSCredential(GSSCredential credential) {
+    if (isClientInitialized) {
+      throw new IllegalStateException("Credentials must be set before initialization.");
+    }
 
     this.authRegistry = RegistryBuilder.<AuthSchemeFactory>create()
         .register(StandardAuthScheme.SPNEGO,

@@ -20,7 +20,6 @@ import org.apache.calcite.avatica.AvaticaUtils;
 
 import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
-import org.apache.hc.client5.http.protocol.HttpClientContext;
 import org.apache.hc.core5.http.NoHttpResponseException;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 
@@ -66,7 +65,7 @@ public class AvaticaCommonsHttpClientImplTest {
             spy(new AvaticaCommonsHttpClientImpl(new URL("http://127.0.0.1")));
 
     doAnswer(failThenSucceed).when(client)
-            .execute(any(HttpPost.class), any(HttpClientContext.class));
+            .execute(any(HttpPost.class));
 
     when(badResponse.getCode()).thenReturn(HttpURLConnection.HTTP_UNAVAILABLE);
 
@@ -98,7 +97,7 @@ public class AvaticaCommonsHttpClientImplTest {
             spy(new AvaticaCommonsHttpClientImpl(new URL("http://127.0.0.1")));
 
     doAnswer(failThenSucceed).when(client)
-            .execute(any(HttpPost.class), any(HttpClientContext.class));
+            .execute(any(HttpPost.class));
 
     when(badResponse.getCode()).thenReturn(HttpURLConnection.HTTP_UNAVAILABLE);
 
